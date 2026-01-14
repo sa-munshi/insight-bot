@@ -1,3 +1,4 @@
+import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
@@ -8,7 +9,10 @@ from telegram.ext import (
     filters,
 )
 
-TOKEN = "8551687370:AAHx7g_viUvhwrHBseuwkj9mouwLQTV76To"
+# 🔐 Token must come from environment variable (Render requirement)
+TOKEN = os.getenv("BOT_TOKEN")
+
+# ---------- Handlers ----------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
@@ -39,7 +43,7 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     elif query.data.startswith("intent_"):
-        intent = query.data.split("_")[1]
+        intent = query.data.split("_", 1)[1]
         context.user_data["intent"] = intent
         await query.edit_message_text("💰 Enter approximate amount (numbers only):")
 
@@ -49,7 +53,7 @@ async def handle_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         amount = int(update.message.text)
-    except:
+    except ValueError:
         await update.message.reply_text("❌ Please enter numbers only.")
         return
 
@@ -88,10 +92,20 @@ async def handle_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(reply)
     context.user_data.clear()
 
-app = ApplicationBuilder().token(TOKEN).build()
-app.add_handler(CommandHandler("start", start))
-app.add_handler(CallbackQueryHandler(handle_buttons))
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_amount))
+# ---------- App Entry Point ----------
 
-print("🤖 Insight Bot running...")
-app.run_polling()
+def main():
+    if not TOKEN:
+        raise RuntimeError("BOT_TOKEN environment variable not set")
+
+    app = ApplicationBuilder().token(TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(handle_buttons))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_amount))
+
+    print("🤖 Insight Bot running...")
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
