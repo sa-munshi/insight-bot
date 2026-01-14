@@ -1,4 +1,7 @@
 import os
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
@@ -9,10 +12,10 @@ from telegram.ext import (
     filters,
 )
 
-# 🔐 Token must come from environment variable (Render requirement)
+# 🔐 Token from Render Environment Variable
 TOKEN = os.getenv("BOT_TOKEN")
 
-# ---------- Handlers ----------
+# ------------------ BOT HANDLERS ------------------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
@@ -92,17 +95,33 @@ async def handle_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(reply)
     context.user_data.clear()
 
-# ---------- App Entry Point ----------
+# ------------------ RENDER PORT KEEP-ALIVE ------------------
+
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is alive")
+
+def run_server():
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), HealthHandler)
+    server.serve_forever()
+
+# ------------------ MAIN ------------------
 
 def main():
     if not TOKEN:
-        raise RuntimeError("BOT_TOKEN environment variable not set")
+        raise ValueError("❌ BOT_TOKEN environment variable not set")
 
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(handle_buttons))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_amount))
+
+    # Start HTTP server for Render
+    threading.Thread(target=run_server, daemon=True).start()
 
     print("🤖 Insight Bot running...")
     app.run_polling()
